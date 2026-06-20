@@ -19,15 +19,28 @@ app.use('/files', express.static(FILES_DIR, { maxAge: '7d' }));
 let browserPromise = null;
 async function getBrowser() {
   if (!browserPromise) {
+    console.log('launching puppeteer...');
     browserPromise = puppeteer.launch({
       headless: 'new',
+      timeout: 20000,
+      protocolTimeout: 20000,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--single-process',
+        '--no-zygote',
         '--font-render-hinting=none'
       ]
+    }).then((b) => {
+      console.log('puppeteer launched ok');
+      return b;
+    }).catch((err) => {
+      console.error('puppeteer launch FAILED:', err);
+      browserPromise = null; // permite retry la următorul request
+      throw err;
     });
   }
   return browserPromise;
@@ -102,7 +115,8 @@ function auth(req, res, next) {
   return res.status(401).json({ error: 'unauthorized' });
 }
 
-app.get('/', (req, res) => res.json({ ok: true, service: 'content-machine-render' }));
+app.get('/', (req, res) => res.json({ ok: true, service: 'content-machine-render', node: process.version }));
+app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
 app.post('/render', auth, async (req, res) => {
   try {
@@ -143,4 +157,5 @@ app.post('/render', auth, async (req, res) => {
   }
 });
 
+console.log('booting render service, PORT=', PORT);
 app.listen(PORT, () => console.log(`render service on :${PORT}`));
